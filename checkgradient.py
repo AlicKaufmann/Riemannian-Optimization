@@ -32,7 +32,7 @@ def checkgradient(problem,x,v):
     q2 = np.array([])
     suff_decr = 1e-4 # same parameter as in linesearch.py
     for t in time:
-        q1_t = problem.manifold.inner(x,grad(x),t*v)
+        q1_t = problem.manifold.inner(x, grad(x), t * v)
         q1 = np.append(q1,q1_t)
         q2_t = cost(retr(x,t*v))-cost(x)
         q2 = np.append(q2,q2_t)

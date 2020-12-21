@@ -47,8 +47,9 @@ class SymplecticStiefel(Manifold):
     def skew(self,A):
         return (A-A.T)/2
 
+    # zero vector of the tangent space
     def zerovec(self, X):
-        return np.zeros((2*self._n,2*self._n))
+        return np.zeros((2*self._n,2*self._p))
 
     @property
     def dim(self):
@@ -71,22 +72,11 @@ class SymplecticStiefel(Manifold):
     # I am not so sure about this procedure but it is coded in the same way for the Stiefel manifold
     def randvec(self, X):
         S = np.random.randn(*X.shape)
-        S = self.proj(X,S)
-        return S/self.norm(X,S)
+        S = self.proj(X, S)
+        return S / self.norm(X, S)
 
-
-    # For tangent vectors, we just store the "S part" so we need a way to construct the full tangent vector
-    # tangent vector -> matrix
-    def toMat(self, X, S):
-        return S@self.J2n@X
-
-    def toVec(self, X, Y):
-        G_X = np.eye(2*self._n)-0.5*X@self.J2p@X.T@self.J2n.T
-        return G_X@Y@(X@self.J2p).T+X@self.J2p@(G_X@Y).T
-
-    def inner(self, X, S1, S2):
-        # Inner product (Riemannian metric) on the tangent space
-        # S1, S2 are elements of the tangent space at X, so we just store their "S" matrix
+    def inner(self, X, V, W):
+        # Inner product (Riemannian metric) on the tangent space between the tangent vectors V and W
 
         # compute B_X
             if self._norm_cond == 1:
@@ -96,54 +86,66 @@ class SymplecticStiefel(Manifold):
 
             B_X = 1/self._rho*self.J2n@X@X.T@self.J2n.T + X_perp_term
 
-            # two different ways of computing tr(Z1^T(B_X)Z2)
-            #return np.tensordot(self.toMat(X, S1), B_X @ self.toMat(X, S2))
-            return np.einsum('ki,kj,ji->',self.toMat(X,S1),B_X,self.toMat(X,S2))
+            return np.einsum('ki,kj,ji->', V, B_X, W)
 
     def eegrad2egrad(self, eegrad):
        # takes the gradiant in ambiant R^{mxn} manifold endowed with standart Frobenius scalar product and returns
        # the the gradiant again in ambiant R^{mxn} manifold but with the special metric (which is the wrapper function)
         def wrapper(X):
-            if self._norm_cond == 1:
-                X_perp_term = self.J2n@(np.eye(2*self._n)-X@np.linalg.solve(X.T@X,X.T))@self.J2n.T
-            else:
-                dummy = np.eye(2*self._n)-X@self.J2p@X.T@J.T
-                X_perp_term = dummy@dummy.T
-            return (self._rho*X@X.T+X_perp_term)@eegrad(X) # return the S part of the gradient
-            # B_X = 1/self._rho*self.J2n@X@X.T@self.J2n.T - np.linalg.matrix_power((self.J2n@X@self.J2p@X.T@self.J2n.T-self.J2n),2)
-            # return np.linalg.solve(B_X,eegrad(X))
+            G = eegrad(X)
+            JX = np.block([[X[self._n:,:]],[-X[:self._n,:]]])
+            invXXXJG = np.linalg.solve(X.T@X,JX.T@G)
+            eG = self._rho*X@X.T@G + G - JX@invXXXJG
+            return eG
         return wrapper
 
+    # in the following we define the Riemannian metric directly in the same way gao does it.
+    # def eegrad2egrad(self, eegrad):
+    #    # takes the gradiant in ambiant R^{mxn} manifold endowed with standart Frobenius scalar product and returns
+    #    # the the gradiant again in ambiant R^{mxn} manifold but with the special metric (which is the wrapper function)
+    #     def wrapper(X):
+    #             XJ = np.block([-X[:,self._p:],X[:,:self._p]])
+    #             JX = np.block([[X[self._n:,:]],[-X[:self._n,:]]])
+    #             G = eegrad(X)
+    #             GX = 0.5*self._rho*G.T@X
+    #             XX = X.T@X
+    #             invXXXJG = np.linalg.solve(XX,JX.T@G)
+    #             PG = G - JX@invXXXJG + X@GX.T # G - JX*invXXXJG + X*GX'
+    #             return PG # return the S part of the gradient
+    #         # B_X = 1/self._rho*self.J2n@X@X.T@self.J2n.T - np.linalg.matrix_power((self.J2n@X@self.J2p@X.T@self.J2n.T-self.J2n),2)
+    #         # return np.linalg.solve(B_X,eegrad(X))
+    #     return wrapper
 
 
-    def proj(self, X, Y):
+    def proj(self, X, V):
         G = np.eye(2*self._n)-0.5*X@self.J2p@X.T@self.J2n.T
-        S = G@Y@(X@self.J2p).T + X@self.J2p@(G@Y).T
-        return S #@self.J2n@X
+        S = G @ V @ (X @ self.J2p).T + X @ self.J2p @ (G @ V).T
+        return S@self.J2n@X
 
 
 
-    def norm(self, X, S):
+    def norm(self, X, V):
         # We use the norm induced by the special metric induced by B_X
-        SVec = S
-        return np.sqrt(self.inner(X, SVec, SVec))
+        return np.sqrt(self.inner(X, V, V))
 
     # Retract to the symplectic-Stiefel manifold using a quasi-geodesic
-    def retr(self, X, S):
+    def retr(self, X, V):
         if self._retraction == 'geodesic':
-            Z = self.toMat(X,S)
-            W = X.T@self.J2n@Z
+            W = X.T@self.J2n@V
             JW = np.block([[W[self._p:,:]],[-W[:self._p,:]]])
-            exp = expm(np.block([[-JW, self.J2p@Z.T@self.J2n@Z], [np.eye(2*self._p), -JW]]))
-            XNew = np.block([X,Z])@exp[:,:2*self._p]@expm(JW)
+            H = np.block([[-JW, self.J2p@V.T@self.J2n@V], [np.eye(2*self._p), -JW]])
+            exp = expm(H)
+            XNew = np.block([X,V])@exp[:,:2*self._p]@expm(JW)
             return XNew
         elif self._retraction =='cayley':
             t = 1
+            G = np.eye(2*self._n)-0.5*X@self.J2p@X.T@self.J2n.T
+            S = G@V@(X@self.J2p).T + X@self.J2p@(G@V).T
             return np.linalg.solve(np.eye(2*self._n)-t/2*S@self.J2n, np.eye(2*self._n)+t/2*S@self.J2n)@X
 
     # define the vector transport
     def transp(self, x1, x2, d):
-        return self.proj(x2, self.toMat(x1,d))
+        return self.proj(x2, d)
 
     def ehess2rhess(self, X, egrad, ehess, H):
         return ehess
