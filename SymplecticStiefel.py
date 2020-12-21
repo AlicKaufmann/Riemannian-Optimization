@@ -23,12 +23,11 @@ class SymplecticStiefel(Manifold):
         if two_height%2==1 or two_width%2==1:
             raise ValueError("Need 2n and 2p to be multiples of 2. Values supplied were 2n = %d" "and 2p=%d" %(two_height,two_width))
 
-        # set dimensions of the symplectic Stiefel manifold
+        #set dimensions of the symplectic Stiefel manifold
         self._n = two_height//2
         self._p = two_width//2
         self._k = k
         #set dimension
-        self._dim = 4*self._n*self._p-self._p*(2*self._p-1)
 
         #set normalization conditions
         self._norm_cond = norm_cond
@@ -47,17 +46,7 @@ class SymplecticStiefel(Manifold):
     def skew(self,A):
         return (A-A.T)/2
 
-    def zerovec(self, X):
-        return np.zeros((2*self._n,2*self._n))
 
-    @property
-    def dim(self):
-        return self._dim
-
-    # typicaldist is the typical distance Delta for the trust region solver
-    @property
-    def typicaldist(self):
-        return np.sqrt(2*self._p * 2* self._k)
 
 
     def rand(self):
@@ -140,10 +129,3 @@ class SymplecticStiefel(Manifold):
         elif self._retraction =='cayley':
             t = 1
             return np.linalg.solve(np.eye(2*self._n)-t/2*S@self.J2n, np.eye(2*self._n)+t/2*S@self.J2n)@X
-
-    # define the vector transport
-    def transp(self, x1, x2, d):
-        return self.proj(x2, self.toMat(x1,d))
-
-    def ehess2rhess(self, X, egrad, ehess, H):
-        return ehess
