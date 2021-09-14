@@ -1,3 +1,3 @@
-## Riemannian-Optimization
-# Riemannian optimization on symplectic Stiefel manifold with manopt
+# Riemannian-Optimization
+## Riemannian optimization on symplectic Stiefel manifold with manopt
 
